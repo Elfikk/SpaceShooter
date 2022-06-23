@@ -1,4 +1,3 @@
-from turtle import width
 import pyglet 
 from pyglet.window import key
 from pyglet.gl import *
@@ -9,25 +8,25 @@ glEnable(GL_TEXTURE_2D)
 
 class MyWindow(pyglet.window.Window):
 
-    def __init__(self, player):
+    def __init__(self, handler):
         super(MyWindow, self).__init__(width = SCREEN_WIDTH,\
             height = SCREEN_HEIGHT)
-        self.push_handlers(player.ship_sprite.key_handler)
-        self.player = player
+        self.push_handlers(handler.player.ship_sprite.key_handler)
+        self.handler = handler
 
     def update(self, _):
-        self.player.update()
+        self.handler.update()
 
     def on_draw(self):
         self.clear()
-        self.player.on_draw()
+        self.handler.on_draw()
 
 class Player():
 
     def __init__(self, image):
         self.ship_sprite = Ship(image)
         self.bullets = []
-        self.hp = 10
+        self.hp = PLAYER_HP
 
     def update(self):
 
@@ -41,9 +40,10 @@ class Player():
                 self.bullets.append(new_bullet)
         
         self.ship_sprite.update()
+        self.bullets = [bullet for bullet in self.bullets if bullet.inbounds()\
+            and not bullet.remove]
         for bullet in self.bullets:
             bullet.update()
-        self.bullets = [bullet for bullet in self.bullets if bullet.inbounds()]
 
     def on_draw(self):
         self.ship_sprite.draw()
@@ -68,8 +68,10 @@ class MovingSprite(pyglet.sprite.Sprite):
         self.v_y = v_y
 
     def update_vel(self):
-        self.v_x = min([copysign(MAX_VEL, self.v_x), self.v_x + self.a_x * 1/FRAME_RATE], key = abs)
-        self.v_y = min([copysign(MAX_VEL, self.v_y), self.v_y + self.a_y * 1/FRAME_RATE], key = abs)
+        self.v_x = min([copysign(MAX_VEL, self.v_x), self.v_x + self.a_x \
+            * 1/FRAME_RATE], key = abs)
+        self.v_y = min([copysign(MAX_VEL, self.v_y), self.v_y + self.a_y \
+            * 1/FRAME_RATE], key = abs)
 
     def update_pos(self):
         self.x += self.v_x * 1/FRAME_RATE
@@ -86,6 +88,7 @@ class Bullet(MovingSprite):
 
     def __init__(self, x=0, y=0, v_x = 0, v_y=BULLET_SPEED):
         super().__init__("Images/BulletCut.png", 3, x, y, v_x, v_y)
+        self.remove = False
 
     def update(self):
         self.update_pos()
@@ -123,11 +126,108 @@ class Ship(MovingSprite):
 
         self.update_pos()
 
+class EnemyShip(MovingSprite):
+    
+    def __init__(self, image, mag = 1, x = 0, y = 0, v_x = 0, v_y = 0):
+
+        MovingSprite.__init__(self, image, mag, x, y, v_x, v_y)
+
+        self.hp = 1
+
+class RoundShip(EnemyShip):
+
+    def __init__(self, x = 0, y = 0, v_x = 0, v_y = 0, x_rot = 0, y_rot = 0, speed = 0):
+        EnemyShip.__init__(self, ROUND_SHIP_DIR, 2, x, y, v_x, v_y)
+        self.x_rot = x_rot 
+        self.y_rot = y_rot
+        self.speed_sq = speed**2
+
+    def update_accel(self):
+        dist_squared = (self.x - self.x_rot)**2 + (self.y - self.y_rot)**2
+        accel_mag = self.speed_sq / dist_squared 
+        self.a_x = accel_mag * (self.x_rot - self.x)
+        self.a_y = accel_mag * (self.y_rot - self.y)
+
+    def update_vel(self):
+        self.v_x += self.a_x * 1/FRAME_RATE
+        self.v_y += self.a_y * 1/FRAME_RATE
+
+    def update(self):
+        self.update_accel()
+        self.update_vel()
+        self.update_pos()
+
+class GameHandler():
+
+    def __init__(self):
+        
+        self.player = Player(SHIP_DIR)
+        self.enemy_ships = []
+        self.player_bullets = []
+        self.enemy_bullets = []
+
+    def check_all_collisions(self):
+        self.enemy_ships = [ship for ship in self.enemy_ships if ship.hp != 0]
+        self.enemy_bullets = [bullet for bullet in self.enemy_bullets if not \
+            bullet.remove]
+        self.player_ships_check()
+        self.bullet_player_check()
+        self.bullet_ships_check()
+
+    def check_collision(self, sprite1, sprite2):
+        dist_sq = (sprite1.x - sprite2.x)**2 + (sprite1.y - sprite2.y)**2
+        threshold = max(sprite1.width**2 + sprite2.height**2, sprite1.height**2\
+            + sprite2.width**2)
+        if dist_sq <= threshold:
+            return True
+        return False
+
+    def player_ships_check(self):
+        for ship in self.enemy_ships:
+            if self.check_collision(self.player.ship_sprite, ship):
+                self.player.hp -= 1
+                ship.hp -= 1
+        
+    def bullet_player_check(self):
+        for bullet in self.enemy_bullets:
+            if self.check_collision(self.player.ship_sprite, bullet):
+                self.player.hp -= 1
+                bullet.remove = True
+                
+    def bullet_ships_check(self):
+        for bullet in self.enemy_bullets:
+            for ship in self.enemy_ships:
+                if self.check_collision(ship, bullet):
+                    self.ship.hp -= 1
+                    bullet.remove = True
+        
+        for bullet in self.player_bullets:
+            for ship in self.enemy_ships:
+                if self.check_collision(ship, bullet):
+                    ship.hp -= 1
+                    bullet.remove = True
+        
+    def update(self):
+        self.check_all_collisions()
+        for bullet in self.enemy_bullets:
+            bullet.update()
+        for ship in self.enemy_ships:
+            ship.update()
+        self.player.update()
+        self.player_bullets = self.player.bullets
+
+    def on_draw(self):
+        self.player.on_draw()
+        for ship in self.enemy_ships:
+            ship.draw()
+        for bullet in self.enemy_bullets:
+            bullet.draw()
 
 if __name__ == "__main__":  
 
-    player = Player("Images/ShipCut.png")
-    window = MyWindow(player)
+    handler = GameHandler()
+    window = MyWindow(handler)
+    handler.enemy_ships.append(RoundShip(250, 600, 0, -450, 600, 600, 450))
     pyglet.clock.schedule_interval(window.update, 1/240)
     pyglet.app.run()
 
