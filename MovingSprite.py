@@ -34,6 +34,7 @@ class MovingSprite(pyglet.sprite.Sprite):
         self.update_pos()
 
     def inbounds(self):
+        #Checks if the moving sprite is within the screen bounds.
         if not -self.width < self.x < SCREEN_WIDTH + self.width:
             return False
         if not -self.height < self.y < SCREEN_HEIGHT + self.height:

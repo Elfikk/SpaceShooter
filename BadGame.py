@@ -6,6 +6,7 @@ from Enemies import RoundShip, ZigZagger, Sweeper
 from GameController import GameHandler
 
 #The biggest OOP mess Ive ever written...
+#Discipline is doing what you hate to do, but doing it like you love it.
 
 glEnable(GL_TEXTURE_2D)
 

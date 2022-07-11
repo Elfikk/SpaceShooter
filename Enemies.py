@@ -43,6 +43,11 @@ class EnemyShip(MovingSprite):
             return [self.targeted_shot(player_x, player_y)]
         return []
 
+    def __repr__(self):
+        repr = self.__class__.__name__ + " @ (" + str(self.x) + "," + \
+        str(self.y) + "), with v = (" + str(self.v_x) + "," + str(self.v_y) + ")"
+        return repr
+
 class RoundShip(EnemyShip):
 
     #Enemy ship which rotates at constant speed at about some point. Target
